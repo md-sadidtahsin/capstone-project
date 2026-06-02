@@ -1,598 +1,245 @@
-# URL Shortener - Microservice Architecture Demo
+# URL Shortener Microservices OSTAD Submission
 
-A production-ready microservice-based URL shortener demonstrating proper service separation with four independent services: Go for high-performance redirects, Python for analytics and dashboard, Node.js for URL metadata enrichment, and Redis for event-driven communication and caching.
+A demo microservice architecture for a URL shortener application with four independently deployable services:
 
-## Architecture
+- **Go**: URL shortening and redirect service
+- **Python**: dashboard, analytics, event processing, and orchestration
+- **Node.js**: URL metadata enrichment
+- **Redis**: caching and Pub/Sub event transport
 
-This project demonstrates a realistic microservice architecture where different services handle their specific responsibilities:
+This repository is intended as a capstone-style project that demonstrates service separation, event-driven communication, and polyglot data flows.
 
-### Services
+---
 
-**Go Service (Port 8000)**
+## Architecture Overview
 
-- **Purpose**: Fast URL redirection and creation
-- **Database**: `go.db` (SQLite)
-- **Responsibilities**:
-  - Generate and store short codes
-  - Handle URL redirects with minimal latency
-  - Send click events to Python service asynchronously
-- **Technology**: Go with Gin framework
+The system is composed of multiple services with clear responsibilities:
 
-**Python Service (Port 5000)**
+- **Go service** (`go-service`): creates short codes, stores URL mappings in SQLite, performs redirects, caches URL lookups in Redis, and publishes click events.
+- **Python service** (`python-service`): serves the web dashboard, coordinates URL creation, receives fallback click events, subscribes to Redis Pub/Sub events, and stores analytics in SQLite.
+- **Node.js service** (`node-service`): retrieves page metadata for the long URL and stores it in SQLite.
+- **Redis** (`redis`): provides caching for redirects and event delivery for click tracking.
 
-- **Purpose**: Analytics, data aggregation, and user interface
-- **Database**: `python.db` (SQLite)
-- **Responsibilities**:
-  - Provide web dashboard for URL creation
-  - Orchestrate URL creation (call Go) and metadata fetching (call Node.js)
-  - Subscribe to Redis click events channel
-  - Collect and aggregate click events
-  - Display analytics and statistics with metadata
-  - Generate visualizations
-  - HTTP fallback endpoint for events
-- **Technology**: Python with Flask, redis-py
+### Data flow
 
-**Node.js Service (Port 3000)**
+1. User creates a short URL through the Python dashboard.
+2. Python calls the Go service to generate a short code.
+3. Python calls the Node.js service to fetch page metadata.
+4. The Go service stores URLs in SQLite and uses Redis to cache lookups.
+5. When a user clicks a short URL, Go redirects and publishes a click event.
+6. Python consumes click events from Redis and saves analytics.
 
-- **Purpose**: URL metadata enrichment
-- **Database**: `node.db` (SQLite)
-- **Responsibilities**:
-  - Fetch page titles, descriptions, and favicons from URLs
-  - Parse HTML content with Cheerio
-  - Store and serve metadata via REST API
-- **Technology**: Node.js with Express, Axios, Cheerio
-
-### Microservice Communication
-
-**URL Creation (Synchronous):**
-
-```
-User → Python Dashboard
-         ↓
-         ├→ Go Service → Create Short URL → go.db
-         └→ Node.js Service → Fetch Metadata → node.db
-         ↓
-    Display URL + Metadata in UI
-```
-
-**Click Events (Event-Driven with Redis):**
-
-```
-User clicks → Go Service
-                ↓
-            1. Check Redis cache
-               ├─ Hit: Instant redirect ⚡
-               └─ Miss: Query DB → Cache in Redis
-                ↓
-            2. Publish to Redis "click_events"
-                ↓
-            Redis Pub/Sub
-                ↓
-            Python subscribes → Process event → python.db
-```
-
-**Communication Patterns:**
-
-- **Python → Go**: HTTP POST (URL creation - needs immediate response)
-- **Python → Node.js**: HTTP POST (metadata fetch - synchronous)
-- **Go → Redis**: Pub/Sub publish (click events - decoupled)
-- **Redis → Python**: Pub/Sub subscribe (click events - async processing)
-- **Go → Redis**: Cache (URL lookups - performance)
-- **Fallback**: HTTP POST if Redis unavailable
-- **No direct database sharing**: Each service owns its data
+---
 
 ## Features
 
-- ✅ Create short URLs through web dashboard
-- ✅ **Lightning-fast redirects with Redis caching** ⚡
-- ✅ **Event-driven architecture with Redis Pub/Sub**
-- ✅ **Never lose events** - Redis queues them if Python is down
-- ✅ URL metadata enrichment via Node.js (titles, descriptions, favicons)
-- ✅ Real-time analytics dashboard
-- ✅ Click tracking and history
-- ✅ Visual charts for click patterns
-- ✅ Top URLs by popularity with page info
-- ✅ Recent activity monitoring
-- ✅ Auto-refreshing dashboard (every 5 seconds)
-- ✅ Visual indicators showing Node.js service status
-- ✅ **Graceful degradation** - HTTP fallback if Redis unavailable
+- Short URL creation and redirect
+- Fast redirect caching with Redis
+- Event-driven click tracking via Redis Pub/Sub
+- HTTP fallback event sink when Redis is unavailable
+- Metadata enrichment (title, description, favicon)
+- Analytics dashboard for created URLs and click statistics
+- Multiple language stack with Go, Python, and Node.js
+- Containerized development using Docker Compose
+
+---
 
 ## Prerequisites
 
-- **Go**: Version 1.24 or higher
-- **Python**: Version 3.14 (or 3.8+)
-- **Node.js**: Version 24.11 or higher (with npm)
-- **Redis**: Version 7 or higher (for local: localhost:6380)
-- **SQLite**: Built-in with Go, Python, and Node.js
-- **Docker & Docker Compose**: For containerized deployment (recommended)
-
-## Installation & Setup
-
-### Option 1: Docker (Recommended) 🐳
-
-**Prerequisites:**
-
 - Docker
 - Docker Compose
+- Go 1.24+
+- Python 3.8+ (3.14 recommended)
+- Node.js 18+ / npm
+- Redis 7+ (local development only, Docker Compose includes Redis)
 
-**Quick Start:**
-
-```bash
-# Navigate to project
-cd /home/xaadu/codes/urlshortner
-
-# Build and start all services
-docker-compose up --build
-
-# Or run in background
-docker-compose up --build -d
-```
-
-**Access the application:**
-
-- Dashboard: `http://localhost:5000`
-- Go Service: `http://localhost:8000`
-- Node.js Service: `http://localhost:3000`
-
-**Useful Docker Commands:**
-
-```bash
-# View logs
-docker-compose logs -f
-
-# View logs for specific service
-docker-compose logs -f python-service
-
-# Stop all services
-docker-compose down
-
-# Stop and remove volumes (deletes databases)
-docker-compose down -v
-
-# Rebuild after code changes
-docker-compose up --build
-```
-
-**How it works:**
-
-- Each service runs in its own container
-- Services communicate via Docker network using container names
-- Databases persist in Docker volumes
-- All services start together with one command!
+> Docker Compose is the recommended way to run the full stack.
 
 ---
 
-### Option 2: Local Development (Without Docker)
+## Quick Start with Docker Compose
 
-### 1. Clone or navigate to the project
+From the repository root:
 
 ```bash
-cd /home/xaadu/codes/urlshortner
+docker-compose up --build
 ```
 
-### 2. Setup Go Service
+Then access the dashboard:
+
+- Dashboard: `http://localhost:5000`
+- Go service: `http://localhost:8000`
+- Node.js service: `http://localhost:3000`
+
+Stop the stack:
+
+```bash
+docker-compose down
+```
+
+Remove volumes (clears SQLite data):
+
+```bash
+docker-compose down -v
+```
+
+---
+
+## Local Development
+
+### 1. Start Redis
+
+If you are not using Docker Compose, start a Redis instance locally on port `6379`.
+
+### 2. Run the Go service
 
 ```bash
 cd go-service
-
-# Download dependencies
 go mod download
-
-# Run the service
-go run main.go
+BASE_URL=http://localhost:8000 REDIS_URL=localhost:6379 go run main.go
 ```
 
-The Go service will start on `http://localhost:8000`
-
-### 3. Setup Python Service
-
-Open a new terminal:
+### 3. Run the Node.js service
 
 ```bash
-cd /home/xaadu/codes/urlshortner/python-service
+cd node-service
+npm install
+npm start
+```
 
-# Create virtual environment (following user preference)
-python3.14 -m venv venv
+### 4. Run the Python service
 
-# Activate virtual environment
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+```bash
+cd python-service
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
 pip install -r requirements.txt
-
-# Run the service
+set GO_SERVICE_URL=http://localhost:8000
+set NODE_SERVICE_URL=http://localhost:3000
+set REDIS_URL=localhost:6379
 python app.py
 ```
 
-The Python service will start on `http://localhost:5000`
+The Python dashboard will be available at `http://localhost:5000`.
 
-### 4. Setup Redis (Local Development)
+---
+## Workflows
 
-```bash
-# User has Redis running at localhost:6380
-# Services will automatically connect to it
-# No additional setup needed!
-```
+### Local development workflow
 
-### 5. Setup Node.js Service
+1. Start a local Redis instance on `localhost:6379`.
+2. Start the Go service on `http://localhost:8000`.
+3. Start the Node.js service on `http://localhost:3000`.
+4. Start the Python service on `http://localhost:5000`.
+5. Use the Python dashboard to create short URLs and verify redirects with the Go service.
+6. Inspect Redis activity, SQLite files, and console logs for event flow and metadata enrichment.
 
-Open a new terminal:
+This workflow is ideal for debugging individual services, iterating quickly, and verifying how Redis Pub/Sub and fallback event delivery behave.
 
-```bash
-cd /home/xaadu/codes/urlshortner/node-service
+### Docker Compose workflow
 
-# Install dependencies
-npm install
+1. Run `docker-compose up --build` from the repository root.
+2. Wait for all containers to start: `redis`, `go-service`, `node-service`, and `python-service`.
+3. Open `http://localhost:5000` to use the dashboard.
+4. Use `docker-compose logs -f` to review logs and verify service startup and event processing.
+5. When finished, run `docker-compose down`.
 
-# Run the service
-node server.js
-```
+This workflow is the fastest way to bring the full stack online with consistent networking and environment variables.
 
-The Node.js service will start on `http://localhost:3000`
+### Kubernetes workflow
+
+The `k8s/` folder includes manifests for deploying the microservices to a Kubernetes cluster.
+
+Recommended flow:
+
+1. Create the namespace: `kubectl apply -f k8s/namespace.yaml`
+2. Deploy Redis: `kubectl apply -f k8s/redis.yaml`
+3. Deploy the services: `kubectl apply -f k8s/go-deployment.yaml -f k8s/node-deployment.yaml -f k8s/python-deployment.yaml`
+4. Expose the services with load balancers or an ingress resource: `kubectl apply -f k8s/ingress.yaml`
+5. Verify pods and services: `kubectl get pods,svc -n urlshortner`
+
+This workflow is best for testing the project in a cloud-like environment with Kubernetes service discovery and deployment manifests.
+
+---
+## Service Endpoints
+
+### `go-service`
+
+- `POST /api/shorten`
+  - Request JSON: `{ "long_url": "https://example.com" }`
+  - Response: short code and short URL
+- `GET /api/go/:code`
+  - Redirects to the original long URL
+
+### `node-service`
+
+- `POST /api/metadata`
+  - Request JSON: `{ "short_code": "abc123", "long_url": "https://example.com" }`
+  - Response: metadata record
+- `GET /api/metadata/:short_code`
+  - Returns stored metadata for one short code
+- `GET /api/metadata`
+  - Returns all stored metadata records
+- `GET /health`
+  - Health check endpoint
+
+### `python-service`
+
+- `GET /`
+  - Dashboard UI
+- `POST /create`
+  - Create a new short URL from the web form
+- `POST /api/events`
+  - Receive click events from `go-service` as fallback when Redis is unavailable
 
 ---
 
-## Usage
+## Testing
 
-### Access the Dashboard
-
-Open your browser and navigate to:
-
-```
-http://localhost:5000
-```
-
-### Create a Short URL
-
-1. Enter a long URL in the input field
-2. Click "Shorten"
-3. Copy the generated short URL
-
-### Test the Redirect
-
-Visit the short URL in your browser:
-
-```
-http://localhost:8000/{short_code}
-```
-
-You'll be redirected to the original URL, and the click will be tracked in the analytics.
-
-### View Analytics
-
-The dashboard automatically shows:
-
-- Total URLs created
-- Total clicks
-- **Page metadata (titles, favicons) fetched by Node.js**
-- Clicks over time (24-hour chart)
-- Top URLs by popularity with page info
-- All created URLs with metadata status indicators
-- Recent click activity
-
-The dashboard refreshes every 5 seconds automatically.
-
-**Visual Indicators:**
-
-- ✅ Green badge "✓ Node.js" = Metadata successfully fetched
-- ❌ Red badge "✗" = Metadata fetch failed
-- Favicon icons displayed next to page titles
-
-## API Endpoints
-
-### Go Service (Port 8000)
-
-**Create Short URL**
+### Node.js
 
 ```bash
-POST /api/shorten
-Content-Type: application/json
-
-{
-  "long_url": "https://example.com/very/long/url"
-}
-
-Response:
-{
-  "short_code": "abc123",
-  "short_url": "http://localhost:8000/abc123",
-  "long_url": "https://example.com/very/long/url"
-}
+cd node-service
+npm test
 ```
 
-**Redirect**
+### Go
 
 ```bash
-GET /{short_code}
-# Redirects to the long URL and sends event to Python service
+cd go-service
+go test ./...
 ```
 
-### Python Service (Port 5000)
-
-**Dashboard**
+### Python
 
 ```bash
-GET /
-# Returns the web dashboard
+cd python-service
+pytest
 ```
 
-**Create URL (from UI)**
-
-```bash
-POST /create
-Content-Type: application/x-www-form-urlencoded
-
-long_url=https://example.com
-```
-
-**Receive Click Event**
-
-```bash
-POST /api/events
-Content-Type: application/json
-
-{
-  "short_code": "abc123",
-  "clicked_at": "2025-11-08T12:00:00Z"
-}
-```
-
-**Get Statistics**
-
-```bash
-GET /api/stats
-
-Returns JSON with:
-- total_urls
-- total_clicks
-- top_urls (with metadata)
-- recent_clicks
-- clicks_over_time
-- all_urls (with metadata)
-```
-
-### Node.js Service (Port 3000)
-
-**Fetch Metadata**
-
-```bash
-POST /api/metadata
-Content-Type: application/json
-
-{
-  "short_code": "abc123",
-  "long_url": "https://example.com"
-}
-
-Response:
-{
-  "short_code": "abc123",
-  "url": "https://example.com",
-  "title": "Example Domain",
-  "description": "Example domain for documentation",
-  "favicon_url": "https://example.com/favicon.ico",
-  "status": "success"
-}
-```
-
-**Get Metadata**
-
-```bash
-GET /api/metadata/{short_code}
-# Returns stored metadata for a short code
-```
-
-**Health Check**
-
-```bash
-GET /health
-# Returns service health status
-```
-
-## Database Schema
-
-### Go Service (go.db)
-
-```sql
-CREATE TABLE urls (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    short_code TEXT UNIQUE NOT NULL,
-    long_url TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### Python Service (python.db)
-
-```sql
-CREATE TABLE click_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    short_code TEXT NOT NULL,
-    clicked_at DATETIME NOT NULL
-);
-
-CREATE TABLE url_metadata (
-    short_code TEXT PRIMARY KEY,
-    long_url TEXT NOT NULL,
-    total_clicks INTEGER DEFAULT 0,
-    first_seen DATETIME NOT NULL,
-    last_clicked DATETIME,
-    title TEXT,
-    description TEXT,
-    favicon_url TEXT,
-    metadata_status TEXT DEFAULT 'pending'
-);
-```
-
-### Node.js Service (node.db)
-
-```sql
-CREATE TABLE metadata (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    short_code TEXT UNIQUE NOT NULL,
-    url TEXT NOT NULL,
-    title TEXT,
-    description TEXT,
-    favicon_url TEXT,
-    fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-## Microservice Design Principles Demonstrated
-
-1. **Service Independence**: Each service has its own database and can run independently
-2. **Single Responsibility**: Go=Redirects, Python=Analytics/UI, Node.js=Metadata, Redis=Messaging
-3. **Event-Driven Architecture**: Redis Pub/Sub for decoupled async communication
-4. **API Communication**: Services communicate via REST APIs for synchronous operations
-5. **Service Orchestration**: Python orchestrates calls to both Go and Node.js
-6. **Message Broker**: Redis as central message bus (industry-standard pattern)
-7. **Caching Strategy**: Redis caching layer for performance optimization
-8. **Graceful Degradation**: System works even if Redis or Node.js unavailable
-9. **Data Ownership**: Each service owns and manages its own data
-10. **Scalability**: Services can be scaled independently, Redis enables horizontal scaling
-11. **Containerization**: Each service runs in isolated Docker containers
-12. **Environment Configuration**: Services use environment variables for Docker/local flexibility
-13. **Resilience**: Events never lost - queued in Redis until processed
-
-## Testing the System
-
-### Docker Testing
-
-If you're running with Docker:
-
-```bash
-# Start services
-docker-compose up --build
-
-# In another terminal, test with curl
-curl -X POST http://localhost:5000/create -d "long_url=https://github.com"
-
-# Watch logs in real-time
-docker-compose logs -f
-
-# View specific service logs
-docker-compose logs go-service
-docker-compose logs python-service
-docker-compose logs node-service
-```
-
-### Test URL Creation and Redirection
-
-```bash
-# Create a short URL
-curl -X POST http://localhost:5000/create \
-  -d "long_url=https://github.com"
-
-# Test redirect (will open in browser)
-curl -L http://localhost:8000/{returned_short_code}
-
-# Check analytics
-curl http://localhost:5000/api/stats
-```
-
-### Verify Microservice Communication
-
-1. Create a URL through the Python dashboard (e.g., https://github.com)
-2. Check Go service logs - you should see the URL creation
-3. Check Node.js service logs - you should see metadata fetching
-4. Check Python service logs - you should see metadata stored
-5. Look at the dashboard - you should see the page title and favicon
-6. Click the short URL
-7. Check Go service logs - you should see the redirect and event sending
-8. Check Python service logs - you should see the click event received
-9. Refresh the dashboard - you should see updated analytics with metadata
-
-**Testing Node.js Service Separately:**
-
-```bash
-# Test metadata fetching directly
-curl -X POST http://localhost:3000/api/metadata \
-  -H "Content-Type: application/json" \
-  -d '{"short_code":"test123","long_url":"https://github.com"}'
-
-# Check health
-curl http://localhost:3000/health
-```
+---
 
 ## Project Structure
 
-```
-/home/xaadu/codes/urlshortner/
-├── README.md
-├── docker-compose.yml    # Docker Compose with 4 services (includes Redis!)
-├── go-service/
-│   ├── Dockerfile        # Go container with CGO for SQLite
-│   ├── .dockerignore     # Docker ignore file
-│   ├── main.go           # Go app with Redis pub/sub & caching
-│   ├── go.mod            # Go dependencies (includes go-redis)
-│   ├── go.sum            # Go dependency checksums
-│   └── go.db             # SQLite database (created at runtime)
-├── python-service/
-│   ├── Dockerfile        # Python container
-│   ├── .dockerignore     # Docker ignore file
-│   ├── app.py            # Flask app with Redis subscriber
-│   ├── requirements.txt   # Python deps (Flask, requests, redis)
-│   ├── python.db         # SQLite database (created at runtime)
-│   └── templates/
-│       └── dashboard.html # Web dashboard UI with metadata display
-└── node-service/
-    ├── Dockerfile        # Node.js container
-    ├── .dockerignore     # Docker ignore file
-    ├── server.js         # Express application (metadata fetching)
-    ├── package.json      # Node.js dependencies
-    └── node.db           # SQLite database (created at runtime)
-```
+- `docker-compose.yml` — full-stack service composition
+- `go-service/` — Go redirect and shortening service
+- `python-service/` — Flask dashboard and analytics service
+- `node-service/` — metadata enrichment service
+- `k8s/` — Kubernetes manifests for deployment
+- `load-test/` — load testing script
 
-## Technologies Used
+---
 
-- **Go 1.24**: High-performance backend
-  - Gin web framework
-  - SQLite3 driver
-  - Alpine Linux (Docker base)
-- **Python 3.14**: Analytics and UI
-  - Flask web framework
-  - Requests library
-  - SQLite3 (built-in)
-  - Slim Debian (Docker base)
-- **Node.js 24.11**: Metadata service
-  - Express web framework
-  - Axios (HTTP client)
-  - Cheerio (HTML parsing)
-  - SQLite3 driver
-  - Alpine Linux (Docker base)
-- **Redis 7**: Message broker and cache
-  - Pub/Sub for event-driven architecture
-  - Caching layer for performance
-  - Persistence with AOF (Append-Only File)
-- **Docker & Docker Compose**: Containerization and orchestration
-- **SQLite**: Lightweight database for all three services
-- **Chart.js**: Data visualization
-- **Modern CSS**: Responsive dashboard design
+## Notes
 
-## Future Enhancements
+- The Go service caches URL lookups in Redis to improve redirect performance.
+- The Python service subscribes to Redis `click_events` and stores analytics data.
+- The Node.js service enriches new URLs with page titles and favicon information.
+- Each service has its own local SQLite persistence file.
 
-- Add Redis for message queue between services
-- Implement rate limiting
-- Add user authentication
-- Support custom short codes
-- Add geographic tracking
-- Implement URL expiration
-- Add bulk URL creation
-- Export analytics reports
-
-## Author
-
-[Abdullah Zayed (zayedabdullah.com)](https://zayedabdullah.com)
-Contact: [Email (contact@zayedabdullah.com)](mailto:contact@zayedabdullah.com) | [GitHub (xaadu)](https://github.com/xaadu) | [LinkedIn (abdullahzayed01)](https://www.linkedin.com/in/abdullahzayed01/)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a pull request.
-
-## Support
-
-If you find this project useful, please consider supporting me with a star or a follow.
+---
 
 ## License
 
-MIT License - Free to use for educational purposes
+This project is provided under the `MIT` license.
