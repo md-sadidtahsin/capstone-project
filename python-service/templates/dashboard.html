@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Shortener Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .metadata-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: left;
+        }
+
+        .metadata-info h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 1em;
+        }
+
+        .metadata-info p {
+            margin: 5px 0;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .favicon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .metadata-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 8px;
+        }
+
+        .metadata-status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .metadata-status.failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .url-title {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .create-section {
+            text-align: center;
+        }
+
+        .create-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .url-form {
+            display: flex;
+            gap: 10px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn-create {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-create:hover {
+            transform: translateY(-2px);
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .short-url {
+            margin-top: 10px;
+            font-size: 1.2em;
+            font-weight: bold;
+            word-break: break-all;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .stat-card .value {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 25px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .url-code {
+            font-family: 'Courier New', monospace;
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .url-link {
+            color: #667eea;
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        .url-link:hover {
+            text-decoration: underline;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .url-form {
+                flex-direction: column;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔗 URL Shortener</h1>
+            <p>Microservice Architecture Demo - Go + Python + Node.js</p>
+        </div>
+
+        <!-- Create Short URL Section -->
+        <div class="card create-section">
+            <h2>Create Short URL</h2>
+            <form class="url-form" id="createForm">
+                <input 
+                    type="url" 
+                    class="url-input" 
+                    id="longUrl" 
+                    placeholder="Enter your long URL here..." 
+                    required
+                >
+                <button type="submit" class="btn-create">Shorten</button>
+            </form>
+            <div class="result" id="result"></div>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total URLs</h3>
+                <div class="value" id="totalUrls">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Clicks</h3>
+                <div class="value" id="totalClicks">0</div>
+            </div>
+        </div>
+
+        <!-- Clicks Over Time Chart -->
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">Clicks Over Time (Last 24 Hours)</h2>
+            <div class="chart-container">
+                <canvas id="clicksChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Top URLs -->
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">Top URLs by Clicks</h2>
+            <div id="topUrlsTable">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- All URLs -->
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">All Created URLs</h2>
+            <div id="allUrlsTable">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Recent Clicks -->
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">Recent Clicks</h2>
+            <div id="recentClicksTable">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let clicksChart = null;
+
+        // Create short URL
+        document.getElementById('createForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const longUrl = document.getElementById('longUrl').value;
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                const response = await fetch('/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `long_url=${encodeURIComponent(longUrl)}`
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    
+                    let metadataHtml = '';
+                    if (data.metadata && data.metadata.status === 'success') {
+                        metadataHtml = `
+                            <div class="metadata-info">
+                                <h4>📊 Metadata Fetched (Node.js Service)</h4>
+                                <p><strong>Title:</strong> ${data.metadata.title}</p>
+                                <p><strong>Description:</strong> ${data.metadata.description}</p>
+                                <p><strong>Favicon:</strong> ${data.metadata.favicon_url ? '✅ Available' : '❌ Not found'}</p>
+                            </div>
+                        `;
+                    } else if (data.metadata && data.metadata.status === 'unavailable') {
+                        metadataHtml = '<div class="metadata-info"><p>⚠️ Node.js metadata service unavailable</p></div>';
+                    }
+                    
+                    resultDiv.innerHTML = `
+                        <div>✅ Short URL created successfully!</div>
+                        <div class="short-url">
+                            <a href="${data.short_url}" target="_blank">${data.short_url}</a>
+                        </div>
+                        ${metadataHtml}
+                    `;
+                    resultDiv.style.display = 'block';
+                    
+                    // Refresh stats
+                    setTimeout(loadStats, 500);
+                    
+                    // Clear form
+                    document.getElementById('longUrl').value = '';
+                } else {
+                    throw new Error(data.error || 'Failed to create short URL');
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Error: ${error.message}`;
+                resultDiv.style.display = 'block';
+            }
+        });
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                // Update stat cards
+                document.getElementById('totalUrls').textContent = data.total_urls;
+                document.getElementById('totalClicks').textContent = data.total_clicks;
+                
+                // Update chart
+                updateChart(data.clicks_over_time);
+                
+                // Update top URLs table
+                updateTopUrlsTable(data.top_urls);
+                
+                // Update all URLs table
+                updateAllUrlsTable(data.all_urls);
+                
+                // Update recent clicks table
+                updateRecentClicksTable(data.recent_clicks);
+                
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        function updateChart(clicksData) {
+            const ctx = document.getElementById('clicksChart').getContext('2d');
+            
+            const labels = clicksData.map(d => {
+                const date = new Date(d.hour);
+                return date.toLocaleString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit' 
+                });
+            });
+            const values = clicksData.map(d => d.count);
+            
+            if (clicksChart) {
+                clicksChart.destroy();
+            }
+            
+            clicksChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Clicks',
+                        data: values,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateTopUrlsTable(topUrls) {
+            const container = document.getElementById('topUrlsTable');
+            
+            if (topUrls.length === 0) {
+                container.innerHTML = '<div class="loading">No data yet. Create some URLs and click them!</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Short Code</th>
+                            <th>Page Info</th>
+                            <th>Long URL</th>
+                            <th>Clicks</th>
+                            <th>Last Clicked</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${topUrls.map(url => {
+                            const faviconHtml = url.favicon_url 
+                                ? `<img src="${url.favicon_url}" class="favicon" onerror="this.style.display='none'">` 
+                                : '🌐 ';
+                            const titleHtml = url.title 
+                                ? `<div class="url-title">${url.title}</div>` 
+                                : '';
+                            const statusBadge = url.metadata_status === 'fetched' 
+                                ? '<span class="metadata-status success">✓ Node.js</span>'
+                                : url.metadata_status === 'failed'
+                                ? '<span class="metadata-status failed">✗</span>'
+                                : '';
+                            
+                            return `
+                            <tr>
+                                <td><span class="url-code">${url.short_code}</span></td>
+                                <td>
+                                    ${faviconHtml}
+                                    ${titleHtml}
+                                    ${statusBadge}
+                                </td>
+                                <td><a href="${url.long_url}" class="url-link" target="_blank">${url.long_url}</a></td>
+                                <td><strong>${url.total_clicks}</strong></td>
+                                <td class="timestamp">${formatTimestamp(url.last_clicked)}</td>
+                            </tr>
+                        `}).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function updateAllUrlsTable(allUrls) {
+            const container = document.getElementById('allUrlsTable');
+            
+            if (allUrls.length === 0) {
+                container.innerHTML = '<div class="loading">No URLs created yet. Create your first one above!</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Short Code</th>
+                            <th>Page Info</th>
+                            <th>Long URL</th>
+                            <th>Clicks</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${allUrls.map(url => {
+                            const faviconHtml = url.favicon_url 
+                                ? `<img src="${url.favicon_url}" class="favicon" onerror="this.style.display='none'">` 
+                                : '🌐 ';
+                            const titleHtml = url.title 
+                                ? `<div class="url-title">${url.title}</div>` 
+                                : '';
+                            const statusBadge = url.metadata_status === 'fetched' 
+                                ? '<span class="metadata-status success">✓ Node.js</span>'
+                                : url.metadata_status === 'failed'
+                                ? '<span class="metadata-status failed">✗</span>'
+                                : '';
+                            
+                            return `
+                            <tr>
+                                <td><span class="url-code">${url.short_code}</span></td>
+                                <td>
+                                    ${faviconHtml}
+                                    ${titleHtml}
+                                    ${statusBadge}
+                                </td>
+                                <td><a href="${url.long_url}" class="url-link" target="_blank">${url.long_url}</a></td>
+                                <td><strong>${url.total_clicks}</strong></td>
+                                <td class="timestamp">${formatTimestamp(url.first_seen)}</td>
+                            </tr>
+                        `}).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function updateRecentClicksTable(recentClicks) {
+            const container = document.getElementById('recentClicksTable');
+            
+            if (recentClicks.length === 0) {
+                container.innerHTML = '<div class="loading">No clicks recorded yet.</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Short Code</th>
+                            <th>Long URL</th>
+                            <th>Clicked At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${recentClicks.map(click => `
+                            <tr>
+                                <td><span class="url-code">${click.short_code}</span></td>
+                                <td><a href="${click.long_url || 'N/A'}" class="url-link" target="_blank">${click.long_url || 'N/A'}</a></td>
+                                <td class="timestamp">${formatTimestamp(click.clicked_at)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Load stats on page load and refresh every 5 seconds
+        loadStats();
+        setInterval(loadStats, 5000);
+    </script>
+</body>
+</html>
+

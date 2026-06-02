@@ -1,0 +1,15 @@
+# Database files
+*.db
+
+# Git
+.git
+.gitignore
+
+# Build artifacts
+urlshortener
+
+# Editor files
+*.swp
+*.swo
+*~
+

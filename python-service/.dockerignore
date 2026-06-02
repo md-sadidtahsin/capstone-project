@@ -1,0 +1,22 @@
+# Database files
+*.db
+
+# Virtual environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Git
+.git
+.gitignore
+
+# Editor files
+*.swp
+*.swo
+*~
+

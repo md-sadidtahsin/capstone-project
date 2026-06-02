@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-service
+  namespace: urlshortener
+spec:
+  selector:
+    app: go-service
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP

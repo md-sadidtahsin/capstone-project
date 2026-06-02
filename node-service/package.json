@@ -1,0 +1,35 @@
+{
+  "name": "url-metadata-service",
+  "version": "1.0.0",
+  "description": "Microservice for fetching URL metadata",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "jest --coverage",
+    "lint": "eslint ."
+  },
+  "keywords": ["microservice", "metadata", "url"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5"
+  }
+  ,
+  "devDependencies": {
+    "jest": "^29.6.1",
+    "supertest": "^6.3.3",
+    "eslint": "^8.45.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverage": true,
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["lcov","text"],
+    "testMatch": ["**/__tests__/**/*.js?(x)","**/?(*.)+(spec|test).js?(x)"]
+  }
+}
+

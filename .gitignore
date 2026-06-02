@@ -1,0 +1,26 @@
+# Databases
+go.db
+python.db
+node.db
+
+# GO
+# go.sum
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# NodeJS
+node_modules/
+node-service/coverage/
+# package-lock.json
+
+# Python
+python-service/coverage/
+python-service/__pycache__/
+python-service/.pytest_cache/
+
+# Go
+go-service/coverage.out
+load-test/results.json

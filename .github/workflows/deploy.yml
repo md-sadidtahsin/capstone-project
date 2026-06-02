@@ -1,0 +1,271 @@
+name: CI/CD Pipeline - URL Shortener
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOCKERHUB_USERNAME: mdsadidtahsin
+  EKS_CLUSTER_NAME: urlshortener-cluster
+  AWS_REGION: ap-south-1
+
+# ─────────────────────────────────────────────
+# JOB 1: Detect which services changed
+# ─────────────────────────────────────────────
+jobs:
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      go-changed: ${{ steps.filter.outputs.go }}
+      python-changed: ${{ steps.filter.outputs.python }}
+      node-changed: ${{ steps.filter.outputs.node }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            go:
+              - 'go-service/**'
+            python:
+              - 'python-service/**'
+            node:
+              - 'node-service/**'
+
+  # ─────────────────────────────────────────────
+  # JOB 2: SonarCloud Code Analysis (all services)
+  # ─────────────────────────────────────────────
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Run Go tests with coverage
+        working-directory: go-service
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          go test ./... -coverprofile=coverage.out
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        working-directory: node-service
+        run: npm ci
+
+      - name: Run Node tests with coverage
+        working-directory: node-service
+        run: npm test
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        working-directory: python-service
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run Python tests with coverage
+        working-directory: python-service
+        run: |
+          python -m pytest --cov=app --cov-report=xml:coverage/coverage.xml tests
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        with:
+          args: >
+            -Dproject.settings=sonar-project.properties
+            -Dsonar.qualitygate.wait=true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ─────────────────────────────────────────────
+  # JOB 3: Build & Push Go Service
+  # ─────────────────────────────────────────────
+  build-go:
+    name: Build & Push Go Service
+    runs-on: ubuntu-latest
+    needs: [detect-changes, sonarcloud]
+    # if: needs.detect-changes.outputs.go-changed == 'true' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push Go Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./go-service
+          push: true
+          tags: |
+            mdsadidtahsin/go-service:latest
+            mdsadidtahsin/go-service:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────
+  # JOB 4: Build & Push Python Service
+  # ─────────────────────────────────────────────
+  build-python:
+    name: Build & Push Python Service
+    runs-on: ubuntu-latest
+    needs: [detect-changes, sonarcloud]
+    # if: needs.detect-changes.outputs.python-changed == 'true' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push Python Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./python-service
+          push: true
+          tags: |
+            mdsadidtahsin/python-service:latest
+            mdsadidtahsin/python-service:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────
+  # JOB 5: Build & Push Node.js Service
+  # ─────────────────────────────────────────────
+  build-node:
+    name: Build & Push Node Service
+    runs-on: ubuntu-latest
+    needs: [detect-changes, sonarcloud]
+    # if: needs.detect-changes.outputs.node-changed == 'true' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push Node Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./node-service
+          push: true
+          tags: |
+            mdsadidtahsin/node-service:latest
+            mdsadidtahsin/node-service:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────
+  # JOB 6: Deploy to AWS EKS
+  # ─────────────────────────────────────────────
+  deploy-to-eks:
+    runs-on: ubuntu-latest
+    needs: [build-go , build-python, build-node]  # Ensure code quality checks pass before deployment
+    if: github.ref == 'refs/heads/main'
+    environment: production  # Optional: enables approval gates & audit logs
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+
+    - name: Apply Namespace & ConfigMaps
+      run: |
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+
+    - name: Create/Update Secrets Securely
+      run: |
+        kubectl create secret generic app-secrets \
+          --from-literal=DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }} \
+          --from-literal=DOCKERHUB_TOKEN=${{ secrets.DOCKERHUB_TOKEN }} \
+          --from-literal=SONAR_TOKEN=${{ secrets.SONAR_TOKEN }} \
+          -n urlshortener \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Inject Exact Image Tags into Manifests
+      run: |
+        # Replace placeholder/latest tags with the exact commit SHA from build step
+        sed -i "s|image: .*go-urlshortener:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/go-urlshortener:latest|g" k8s/go-deployment.yaml
+        sed -i "s|image: .*python-urlshortener:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/python-urlshortener:latest|g" k8s/python-deployment.yaml
+        sed -i "s|image: .*node-urlshortener:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/node-urlshortener:latest|g" k8s/node-deployment.yaml
+
+    - name: Apply Redis & Services (ClusterIP)
+      run: |
+        kubectl apply -f k8s/redis.yaml
+        kubectl apply -f k8s/go-service.yaml
+        kubectl apply -f k8s/python-service.yaml
+        kubectl apply -f k8s/node-service.yaml
+
+    - name: Apply Deployments & HPAs
+      run: |
+        kubectl apply -f k8s/go-deployment.yaml
+        kubectl apply -f k8s/go-hpa.yaml
+        kubectl apply -f k8s/python-deployment.yaml
+        kubectl apply -f k8s/python-hpa.yaml
+        kubectl apply -f k8s/node-deployment.yaml
+        kubectl apply -f k8s/node-hpa.yaml
+
+    - name: Apply Ingress & Prometheus ServiceMonitors
+      run: |
+        kubectl apply -f k8s/ingress.yaml
+        # kubectl apply -f k8s/servicemonitors/
+
+    - name: Wait for Healthy Rollout
+      run: |
+        kubectl rollout status deployment/go-service -n urlshortener --timeout=120s
+        kubectl rollout status deployment/python-service -n urlshortener --timeout=120s
+        kubectl rollout status deployment/node-service -n urlshortener --timeout=120s
+        echo "✅ All deployments successfully rolled out."
+
+    - name: Verify & Output Application URL
+      run: |
+        echo "📦 Current Cluster State:"
+        kubectl get pods,svc,ingress,hpa -n urlshortener -o wide
+        INGRESS_HOST=$(kubectl get ingress urlshortener-ingress -n urlshortener -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
+        echo "🌐 Application URL: http://${INGRESS_HOST}"
+        echo "APP_URL=http://${INGRESS_HOST}" >> $GITHUB_ENV

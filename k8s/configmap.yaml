@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: urlshortener
+data:
+  BASE_URL: "http://a7f1995bb6fbc41c88fc5f196970ecb8-431e7041e1697807.elb.ap-south-1.amazonaws.com"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  GO_SERVICE_URL: "http://go-service:8000"
+  NODE_SERVICE_URL: "http://node-service:3000"
+  PYTHON_SERVICE_URL: "http://python-service:5000"
